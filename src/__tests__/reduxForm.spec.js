@@ -453,14 +453,14 @@ const describeReduxForm = (name, structure, combineReducers, expect) => {
       })
     })
 
-    describe(`${name} form level errors`, () => {
-      it('should have error prop matching synchronous validation _error', () => {
+    describe('form level errors', () => {
+      it('should come from synchronous validation _error', () => {
         const validate = () => {_error: 'foo'}
         const config = { validate }
         expect(propChecker({}, noop, config).error).toBe('foo')
       })
 
-      it('should have error prop matching asyncValidation _error', done => {
+      it('should come from async validation _error', done => {
         const store = makeStore({})
         const inputRender = createSpy(React.DOM.input).andCallThrough()
         const formRender = createSpy()
@@ -512,7 +512,7 @@ const describeReduxForm = (name, structure, combineReducers, expect) => {
         })
       })
 
-      it('should have error prop matching async submit _error', done => {
+      it('should come from async submit _error', done => {
         const store = makeStore({})
         const formRender = createSpy()
         const submitErrors = {
