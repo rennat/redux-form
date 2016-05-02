@@ -157,6 +157,10 @@ const describeReduxForm = (name, structure, combineReducers, expect) => {
       expect(propChecker({ submitting: false }).submitting).toBe(false)
     })
 
+    it('should provide error', () => {
+      expect(Object.keys(propChecker({})).indexOf('error')).toNotBe(-1)
+    })
+
     it('should not rerender unless form-wide props (except value!) change', () => {
       const spy = createSpy()
       const { dispatch } = propChecker({}, spy, {
@@ -446,6 +450,107 @@ const describeReduxForm = (name, structure, combineReducers, expect) => {
         expect(inputRender.calls[ 3 ].arguments[ 0 ].valid).toBe(false)
         expect(inputRender.calls[ 3 ].arguments[ 0 ].error).toBe('async error')
         done()
+      })
+    })
+
+    describe(`${name} form level errors`, () => {
+      it('should have error prop matching synchronous validation _error', () => {
+        const validate = () => {_error: 'foo'}
+        const config = { validate }
+        expect(propChecker({}, noop, config).error).toBe('foo')
+      })
+
+      it('should have error prop matching asyncValidation _error', done => {
+        const store = makeStore({})
+        const inputRender = createSpy(React.DOM.input).andCallThrough()
+        const formRender = createSpy()
+        const asyncErrors = {
+          _error: 'foo'
+        }
+        const asyncValidate = createSpy().andReturn(Promise.reject(asyncErrors))
+
+        class Form extends Component {
+          render() {
+            formRender(this.props)
+            return (
+              <form>
+                <Field name="foo" component={inputRender} type="text"/>
+              </form>
+            )
+          }
+        }
+        const Decorated = reduxForm({
+          form: 'testForm',
+          asyncValidate
+        })(Form)
+
+        const dom = TestUtils.renderIntoDocument(
+          <Provider store={store}>
+            <Decorated/>
+          </Provider>
+        )
+        expect(store.getState()).toEqualMap({
+          form: {}
+        })
+        expect(formRender).toHaveBeenCalled()
+        expect(asyncValidate).toNotHaveBeenCalled()
+
+        formRender.reset()
+        const inputElement = TestUtils.findRenderedDOMComponentWithTag(dom, 'input')
+        TestUtils.Simulate.change(inputElement, { target: { value: 'bar' } })
+        expect(formRender).toHaveBeenCalled() // rerendered because pristine -> dirty
+        expect(asyncValidate).toNotHaveBeenCalled() // not yet
+
+        formRender.reset()
+        TestUtils.Simulate.blur(inputElement, { target: { value: 'bar' } })
+        setTimeout(() => {
+          expect(asyncValidate).toHaveBeenCalled()
+          expect(formRender).toHaveBeenCalled()
+          let lastCall = formRender.calls[formRender.calls.length - 1]
+          expect(lastCall.arguments[0].error).toBe('foo')  // the meat of the test right here
+          done()
+        })
+      })
+
+      it('should have error prop matching async submit _error', done => {
+        const store = makeStore({})
+        const formRender = createSpy()
+        const submitErrors = {
+          _error: 'foo'
+        }
+        const doSubmit = createSpy().andReturn(Promise.reject(submitErrors))
+
+        class Form extends Component {
+          render() {
+            formRender(this.props)
+            return (
+              <form onSubmit={this.props.handleSubmit(doSubmit)}></form>
+            )
+          }
+        }
+        const Decorated = reduxForm({
+          form: 'testForm'
+        })(Form)
+
+        const dom = TestUtils.renderIntoDocument(
+          <Provider store={store}>
+            <Decorated/>
+          </Provider>
+        )
+        expect(store.getState()).toEqualMap({
+          form: {}
+        })
+        expect(formRender).toHaveBeenCalled()
+
+        formRender.reset()
+        const formElement = TestUtils.findRenderedDOMComponentWithTag(dom, 'form')
+        TestUtils.Simulate.submit(formElement)
+        setTimeout(() => {
+          expect(formRender).toHaveBeenCalled()
+          let lastCall = formRender.calls[formRender.calls.length - 1]
+          expect(lastCall.arguments[0].error).toBe('foo')  // the meat of the test right here
+          done()
+        })
       })
     })
   })
